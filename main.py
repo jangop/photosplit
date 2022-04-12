@@ -27,11 +27,12 @@ def process_image_file(
     image = load_image(image_path)
     if debug_path:
         debug_path = debug_path / name
-        debug_path.mkdir(exist_ok=True)
+        debug_path.mkdir(parents=True, exist_ok=True)
     photos = extract_photos_from_image(image, debug_dir=debug_path, **kwargs)
     n_photos = len(photos)
     logger.info(f"Extracted {n_photos} photos")
     pad = max(2, n_photos // 10)
+    out_path.mkdir(exist_ok=True)
     for i_photo, photo in enumerate(photos):
         save_image(photo, out_path / f"{name}-{i_photo:0{pad}d}{ext}")
 
@@ -54,8 +55,6 @@ def extract_photos_from_image(image, debug_dir: Path = None) -> list[np.ndarray]
 
     # Prepare debug directory.
     debug_step = 0
-    if debug_dir:
-        os.makedirs(debug_dir, exist_ok=True)
 
     # Convert to grayscale.
     image = skimage.color.rgb2gray(original)
