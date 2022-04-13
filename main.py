@@ -134,13 +134,20 @@ def extract_photos_from_image(image, debug_dir: Path = None) -> list[np.ndarray]
 
     # Find contours.
     contours = skimage.measure.find_contours(watershed, 0.5)
+    contours = [contour[:, [1, 0]] for contour in contours]
+    if debug_dir:
+        path = debug_dir / f"{debug_step:02d}-contours.png"
+        plot_polygons(image, contours, path, plot_text=False)
+        debug_step += 1
+
+    # Simplify contours.
     approximations = [
         skimage.measure.approximate_polygon(contour, tolerance=10)
         for contour in contours
     ]
     if debug_dir:
-        path = debug_dir / f"{debug_step:02d}-contours.png"
-        plot_polygons(image, approximations, path)
+        path = debug_dir / f"{debug_step:02d}-approximations.png"
+        plot_polygons(image, approximations, path, plot_text=True)
         debug_step += 1
 
     # Extract polygons.
@@ -149,11 +156,9 @@ def extract_photos_from_image(image, debug_dir: Path = None) -> list[np.ndarray]
         # Extract rectangles.
         if len(approximation) == 5:
             # Leave out the closing point and scale up.
-            source_coordinates = approximation[:-1] / factor + np.array(
+            source_coordinates = approximation / factor + np.array(
                 [crop_vertical, crop_horizontal]
             )
-            source_coordinates = source_coordinates[[2, 3, 0, 1]]
-            source_coordinates = source_coordinates[:, [1, 0]]
 
             # Determine size.
             target_width = int(
@@ -179,7 +184,7 @@ def extract_photos_from_image(image, debug_dir: Path = None) -> list[np.ndarray]
 
             # Estimate transformation.
             transform = skimage.transform.ProjectiveTransform()
-            transform.estimate(source_coordinates, target_coordinates)
+            transform.estimate(source_coordinates[:-1], target_coordinates)
 
             # Apply transformation.
             warped = skimage.transform.warp(
@@ -187,10 +192,10 @@ def extract_photos_from_image(image, debug_dir: Path = None) -> list[np.ndarray]
             )
             if debug_dir:
                 path = debug_dir / f"{debug_step:02d}-{i:02d}-points.png"
-                plot_polygons(original, [source_coordinates], path)
+                plot_polygons(original, [source_coordinates], path, plot_text=True)
                 debug_step += 1
                 path = debug_dir / f"{debug_step:02d}-{i:02d}-warped.png"
-                plot_polygons(warped, [target_coordinates], path)
+                plot_polygons(warped, [target_coordinates], path, plot_text=True)
                 debug_step += 1
 
             # Store result.

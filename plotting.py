@@ -31,15 +31,17 @@ def plot_points(image, points: Iterable[Point], path: Path):
     plt.close(fig)
 
 
-def plot_polygons(image, polygons, path: Path):
-    fig, ax = plt.subplots()
+def plot_polygons(image, polygons, path: Path, plot_text: bool):
+    fig, ax = plt.subplots(figsize=(10, 10))
     ax.imshow(image, cmap=plt.get_cmap("Greys"))  # , origin='lower')
     ax.autoscale(False)
     # ax.invert_yaxis()
     for polygon in polygons:
         ax.plot(polygon[:, 0], polygon[:, 1], "-r", linewidth=2)
+        n_points = len(polygon)
         for i, point in enumerate(polygon):
             ax.scatter(point[0], point[1], marker="+", color="cyan", s=10)
-            ax.text(point[0], point[1], f"{i}: {point}", color="cyan")
+            if plot_text and i < n_points - 1:
+                ax.text(point[0], point[1], f"{i}: {point}", color="cyan")
     fig.savefig(path)
     plt.close(fig)
