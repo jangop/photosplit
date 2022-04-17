@@ -1,6 +1,6 @@
 import os
 from pathlib import Path
-
+import sklearn.neighbors
 import numpy as np
 import skimage.io
 import skimage.transform
@@ -11,7 +11,8 @@ import skimage.segmentation
 import skimage.filters
 import skimage.measure
 
-from plotting import plot_polygons
+from geometry import Point
+from plotting import plot_polygons, plot_points
 
 from loguru import logger
 
@@ -132,6 +133,48 @@ def extract_photos_from_image(image, debug_dir: Path = None) -> list[np.ndarray]
         )
         debug_step += 1
 
+    # Find corners.
+    watershed[watershed == 2] = 255
+    corners = skimage.feature.corner_peaks(
+        skimage.feature.corner_harris(watershed, k=0.001, eps=1e-6, sigma=5), min_distance=5, threshold_rel=0.5
+    )
+    if debug_dir:
+        path = debug_dir / f"{debug_step:02d}-corners.png"
+        points = [Point(y, x) for x, y in corners]
+        plot_points(watershed, points, path)
+        debug_step += 1
+
+    sub_pixel_corners = skimage.feature.corner_subpix(watershed, corners)
+    if debug_dir:
+        path = debug_dir / f"{debug_step:02d}-sub_pixel_corners.png"
+        points = [Point(y, x) for x, y in sub_pixel_corners]
+        plot_points(watershed, points, path)
+        debug_step += 1
+
+    # if debug_dir:
+    #     ks = [0.001, 0.01, 0.1]
+    #     epsilons = [1e-06, 1e-05, 1e-04, 1e-03, 1e-02, 1e-01]
+    #     sigmas = [0.01, 0.1, 1, 2, 3, 4, 5]
+    #     min_dists = [5, 10, 15, 20]
+    #     rel_thresholds = [0.01, 0.02, 0.05, 0.1, 0.2, 0.5]
+    #     for k in ks:
+    #         for epsilon in epsilons:
+    #             for sigma in sigmas:
+    #                 for min_dist in min_dists:
+    #                     for rel_threshold in rel_thresholds:
+    #                         corners = skimage.feature.corner_peaks(
+    #                             skimage.feature.corner_harris(
+    #                                 watershed, k=k, eps=epsilon, sigma=sigma
+    #                             ), min_distance=min_dist, threshold_rel=rel_threshold
+    #                         )
+    #                         dir = debug_dir / "corners"
+    #                         dir.mkdir(exist_ok=True)
+    #                         path = dir / f"k-{k}_epsilon-{epsilon}_sigma-{sigma}_min_dist-{min_dist}_rel_threshold-{rel_threshold}.png"
+    #                         points = [Point(y, x) for x, y in corners]
+    #                         plot_points(watershed, points, path)
+
+
+
     # Find contours.
     contours = skimage.measure.find_contours(watershed, 0.5)
     contours = [contour[:, [1, 0]] for contour in contours]
@@ -150,9 +193,30 @@ def extract_photos_from_image(image, debug_dir: Path = None) -> list[np.ndarray]
         plot_polygons(image, approximations, path, plot_text=True)
         debug_step += 1
 
+    # Correct polygons.
+    neighbors = sklearn.neighbors.NearestNeighbors(n_neighbors=1)
+    neighbors.fit(sub_pixel_corners)
+    def correct_polygon(polygon, neighbors):
+        distances, indices = neighbors.kneighbors(polygon)
+        coordinates = sub_pixel_corners[indices[:, 0]]
+        for i, (point, coordinate) in enumerate(zip(polygon, coordinates)):
+            logger.critical(f"{i}: {point} -> {coordinate}")
+        return coordinates
+    corrected_approximations = [
+        correct_polygon(approximation, neighbors)
+        for approximation in approximations
+    ]
+    if debug_dir:
+        path = debug_dir / f"{debug_step:02d}-corrected_approximations.png"
+        plot_polygons(image, corrected_approximations, path, plot_text=True)
+        debug_step += 1
+
+
+
+
     # Extract polygons.
     photos = []
-    for i, approximation in enumerate(approximations):
+    for i, approximation in enumerate(corrected_approximations):
         # Extract rectangles.
         if len(approximation) == 5:
             # Leave out the closing point and scale up.

@@ -26,7 +26,7 @@ def plot_points(image, points: Iterable[Point], path: Path):
     ax.autoscale(False)
     ax.invert_yaxis()
     for point in points:
-        ax.scatter(point.x, point.y, marker="+", s=10)
+        ax.scatter(point.x, point.y, marker="x", s=15)
     fig.savefig(path)
     plt.close(fig)
 
